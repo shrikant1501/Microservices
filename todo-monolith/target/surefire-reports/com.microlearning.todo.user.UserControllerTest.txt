@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.microlearning.todo.user.UserControllerTest
+-------------------------------------------------------------------------------
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 10.82 s -- in com.microlearning.todo.user.UserControllerTest
