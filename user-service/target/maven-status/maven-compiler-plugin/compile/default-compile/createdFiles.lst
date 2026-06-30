@@ -1,0 +1,11 @@
+com\microlearning\user\api\CreateUserRequest.class
+com\microlearning\user\UserServiceApplication.class
+com\microlearning\user\common\GlobalExceptionHandler$ErrorResponse.class
+com\microlearning\user\api\UserResponse.class
+com\microlearning\user\domain\User$Builder.class
+com\microlearning\user\domain\UserRepository.class
+com\microlearning\user\common\GlobalExceptionHandler.class
+com\microlearning\user\api\UserResponse$Builder.class
+com\microlearning\user\api\UserService.class
+com\microlearning\user\api\UserController.class
+com\microlearning\user\domain\User.class

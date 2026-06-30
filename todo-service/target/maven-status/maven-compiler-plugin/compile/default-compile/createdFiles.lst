@@ -1,0 +1,13 @@
+com\microlearning\todo\domain\Todo.class
+com\microlearning\todo\api\TodoService.class
+com\microlearning\todo\TodoServiceApplication.class
+com\microlearning\todo\domain\Todo$Builder.class
+com\microlearning\todo\domain\TodoRepository.class
+com\microlearning\todo\common\GlobalExceptionHandler.class
+com\microlearning\todo\api\TodoController.class
+com\microlearning\todo\api\CreateTodoRequest.class
+com\microlearning\todo\api\TodoResponse$Builder.class
+com\microlearning\todo\common\GlobalExceptionHandler$ErrorResponse.class
+com\microlearning\todo\client\UserResponse.class
+com\microlearning\todo\api\TodoResponse.class
+com\microlearning\todo\client\UserServiceClient.class
