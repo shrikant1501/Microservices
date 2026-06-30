@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# user-service-prod.yml — PRODUCTION overrides for user-service
+# ─────────────────────────────────────────────────────────────────────────────
+# Active when: spring.profiles.active=prod
+# Merges on top of: application.yml + user-service.yml
+#
+# IMPORTANT: Real production would use Vault or encrypted values here.
+# NEVER commit plaintext passwords in a real project.
+# This file demonstrates the structure only.
+
+spring:
+  datasource:
+    # Production: point to real PostgreSQL
+    url: jdbc:postgresql://prod-db.internal:5432/users
+    username: ${DB_USER}          # injected from environment variable
+    password: ${DB_PASSWORD}      # injected from environment variable / Vault
+    hikari:
+      maximum-pool-size: 20       # higher pool for production load
+  jpa:
+    hibernate:
+      ddl-auto: validate          # NEVER create-drop in production
+    show-sql: false
+  kafka:
+    bootstrap-servers: kafka1.internal:9092,kafka2.internal:9092,kafka3.internal:9092
+
+logging:
+  level:
+    com.microlearning: WARN       # reduce noise in production

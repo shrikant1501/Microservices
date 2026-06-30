@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# application.yml — SHARED defaults for ALL services, ALL profiles
+# ─────────────────────────────────────────────────────────────────────────────
+# Every microservice inherits these unless overridden in its own file.
+# This is the single place to change config shared across your entire platform.
+
+# Eureka registration — every service points to the same registry
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# Actuator — expose health + info on all services
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,refresh   # refresh endpoint needed for @RefreshScope
+  endpoint:
+    health:
+      show-details: always
+
+# Logging default
+logging:
+  level:
+    com.microlearning: INFO

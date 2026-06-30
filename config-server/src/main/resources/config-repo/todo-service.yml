@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# todo-service.yml — config specific to todo-service (default profile)
+# ─────────────────────────────────────────────────────────────────────────────
+
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:todosdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+
+# Feign timeout config (centrally managed — no per-service file editing)
+spring.cloud.openfeign.client.config.user-service:
+  connect-timeout: 3000
+  read-timeout: 5000
+
+logging:
+  level:
+    com.microlearning: DEBUG

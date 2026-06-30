@@ -18,11 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Uses @EmbeddedKafka — starts an in-memory Kafka broker for tests.
- * No real Kafka installation needed. Tests run in CI with zero setup.
- *
- * MICROSERVICES TESTING INSIGHT:
- * @EmbeddedKafka replaces the real Kafka broker the same way @MockBean
- * replaces real service dependencies. Each service tests in isolation.
+ * Config server and Eureka disabled via test application.properties.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

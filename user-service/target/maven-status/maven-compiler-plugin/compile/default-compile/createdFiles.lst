@@ -8,6 +8,7 @@ com\microlearning\user\api\UserController.class
 com\microlearning\user\domain\User.class
 com\microlearning\user\event\KafkaProducerConfig.class
 com\microlearning\user\api\CreateUserRequest.class
+com\microlearning\user\api\ConfigDemoController.class
 com\microlearning\user\domain\User$Builder.class
 com\microlearning\user\domain\UserRepository.class
 com\microlearning\user\api\UserService.class
