@@ -37,14 +37,13 @@ import org.springframework.web.bind.annotation.PathVariable;
  *    → returns it to the caller
  *
  * name = "user-service":
- *   Phase 3: matched to user-service.url in application.properties
- *   Phase 5: matched to the service registered in Eureka as "user-service"
- *
- * url = "${user-service.url:}":
- *   Phase 3: reads from property (http://localhost:8081)
- *   Phase 5: REMOVE this — Eureka resolves by name automatically
+ *   Matches the spring.application.name of the target service.
+ *   Phase 3: url attribute pointed to localhost:8081 (hardcoded)
+ *   Phase 5: url attribute REMOVED — Eureka resolves "user-service"
+ *            to a live IP:port via Spring Cloud LoadBalancer.
+ *            Round-robin across all registered instances automatically.
  */
-@FeignClient(name = "user-service", url = "${user-service.url:}")
+@FeignClient(name = "user-service")
 public interface UserServiceClient {
 
     /**

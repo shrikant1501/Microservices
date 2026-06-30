@@ -68,6 +68,11 @@
             This is the ONLY way todo-service communicates with user-service.
             No shared database. No shared repository. Only HTTP over the network.
         -->
+        <!-- Eureka client — registers this service and enables name-based discovery -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
