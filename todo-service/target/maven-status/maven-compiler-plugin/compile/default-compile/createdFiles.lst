@@ -1,6 +1,8 @@
 com\microlearning\todo\domain\Todo.class
 com\microlearning\todo\api\TodoService.class
+com\microlearning\todo\client\FeignAuthInterceptor.class
 com\microlearning\todo\TodoServiceApplication.class
+com\microlearning\todo\filter\CorrelationIdMdcFilter.class
 com\microlearning\todo\domain\OutboxEvent.class
 com\microlearning\todo\domain\Todo$Builder.class
 com\microlearning\todo\domain\OutboxEventRepository.class

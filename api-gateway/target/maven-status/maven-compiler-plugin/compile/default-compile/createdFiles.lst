@@ -1,3 +1,4 @@
 com\microlearning\gateway\filter\CorrelationIdFilter.class
 com\microlearning\gateway\filter\LoggingFilter.class
 com\microlearning\gateway\ApiGatewayApplication.class
+com\microlearning\gateway\filter\JwtAuthenticationFilter.class

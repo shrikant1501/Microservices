@@ -12,3 +12,4 @@ com\microlearning\user\api\ConfigDemoController.class
 com\microlearning\user\domain\User$Builder.class
 com\microlearning\user\domain\UserRepository.class
 com\microlearning\user\api\UserService.class
+com\microlearning\user\filter\CorrelationIdMdcFilter.class
