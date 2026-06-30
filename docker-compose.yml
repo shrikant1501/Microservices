@@ -1,0 +1,245 @@
+# =============================================================================
+# docker-compose.yml — Microservices Learning Project
+# =============================================================================
+#
+# Starts the ENTIRE system with: docker compose up
+#
+# STARTUP ORDER (enforced by depends_on + healthchecks):
+#   1. zookeeper
+#   2. kafka          (waits: zookeeper healthy)
+#   3. zipkin         (independent)
+#   4. eureka-server  (waits: nothing — starts fast)
+#   5. config-server  (waits: nothing — starts fast)
+#   6. user-service         (waits: kafka + eureka + config all healthy)
+#   7. notification-service (waits: kafka + eureka healthy)
+#   8. todo-service         (waits: kafka + eureka + config + user-service healthy)
+#   9. api-gateway          (waits: eureka healthy)
+#
+# KEY ARCHITECTURE POINT:
+#   All services are on the same Docker network: microservices-network.
+#   Container names ARE the hostnames. "kafka:9092" resolves via Docker DNS.
+#   Environment variables override application.properties at runtime.
+#   The same image runs in dev (H2) and prod (PostgreSQL) — only env vars differ.
+#
+# USEFUL COMMANDS:
+#   docker compose up -d              # start all, background
+#   docker compose logs -f            # stream all logs
+#   docker compose logs -f todo-service  # stream one service
+#   docker compose ps                 # health status of all containers
+#   docker compose down               # stop all (keep volumes)
+#   docker compose down -v            # stop all + wipe volumes (fresh start)
+#   docker compose build user-service # rebuild one image
+# =============================================================================
+
+services:
+
+  # ===========================================================================
+  # INFRASTRUCTURE: Zookeeper + Kafka + Zipkin
+  # ===========================================================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # TWO listeners:
+      #   PLAINTEXT          = inside Docker network (other containers use this)
+      #   PLAINTEXT_HOST     = from your laptop (localhost:29092)
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "29092:29092"   # exposed to host for tools like Kafka UI / kcat
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # Distributed tracing UI — see trace trees at http://localhost:9411
+  zipkin:
+    image: openzipkin/zipkin:3
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9411/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # SPRING BOOT INFRASTRUCTURE: Eureka + Config Server
+  # ===========================================================================
+
+  eureka-server:
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - microservices-network
+    environment:
+      - SPRING_APPLICATION_NAME=eureka-server
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+
+  config-server:
+    build:
+      context: ./config-server
+      dockerfile: Dockerfile
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8888/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
+
+  # ===========================================================================
+  # BUSINESS SERVICES
+  # ===========================================================================
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    networks:
+      - microservices-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      # Override localhost references — inside Docker, use container names
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
+      # Tracing — send spans to Zipkin container
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "8083:8083"
+    networks:
+      - microservices-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+
+  todo-service:
+    build:
+      context: ./todo-service
+      dockerfile: Dockerfile
+    container_name: todo-service
+    ports:
+      - "8082:8082"
+    networks:
+      - microservices-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - microservices-network
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      # JWT secret — in production load from Docker secret or Vault, never hardcode
+      JWT_SECRET: microlearning-dev-secret-key-must-be-at-least-256-bits-long-for-hs256
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+# All services share one bridge network.
+# Containers reach each other by name (e.g., kafka:9092, eureka-server:8761).
+# Nothing is exposed to the host except explicitly mapped ports.
+networks:
+  microservices-network:
+    driver: bridge
+    name: microservices-network
