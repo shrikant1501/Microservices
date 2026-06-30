@@ -1,1 +1,4 @@
+com\microlearning\notification\consumer\UserCreatedEvent.class
 com\microlearning\notification\NotificationServiceApplication.class
+com\microlearning\notification\consumer\NotificationConsumer.class
+com\microlearning\notification\consumer\KafkaConsumerConfig.class

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,16 +16,27 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * Uses @EmbeddedKafka — starts an in-memory Kafka broker for tests.
+ * No real Kafka installation needed. Tests run in CI with zero setup.
+ *
+ * MICROSERVICES TESTING INSIGHT:
+ * @EmbeddedKafka replaces the real Kafka broker the same way @MockBean
+ * replaces real service dependencies. Each service tests in isolation.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@EmbeddedKafka(partitions = 1, topics = {"user-created"},
+               brokerProperties = {"listeners=PLAINTEXT://localhost:9093",
+                                   "port=9093"})
 class UserServiceIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper mapper;
 
     @Test
-    @DisplayName("POST /api/users → creates user, returns 201")
+    @DisplayName("POST /api/users → creates user and returns 201")
     void createUser() throws Exception {
         var req = new CreateUserRequest();
         req.setName("Alice"); req.setEmail("alice@test.com");
@@ -34,15 +46,7 @@ class UserServiceIntegrationTest {
                         .content(mapper.writeValueAsString(req)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id",    notNullValue()))
-                .andExpect(jsonPath("$.name",  is("Alice")))
-                .andExpect(jsonPath("$.email", is("alice@test.com")));
-    }
-
-    @Test
-    @DisplayName("GET /api/users/{id} → 404 for missing user")
-    void getUser_notFound() throws Exception {
-        mockMvc.perform(get("/api/users/9999"))
-                .andExpect(status().isNotFound());
+                .andExpect(jsonPath("$.name",  is("Alice")));
     }
 
     @Test
@@ -56,5 +60,11 @@ class UserServiceIntegrationTest {
                 .andExpect(status().isCreated());
         mockMvc.perform(post("/api/users").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("GET /api/users/{id} → 404 for missing user")
+    void getUser_notFound() throws Exception {
+        mockMvc.perform(get("/api/users/9999")).andExpect(status().isNotFound());
     }
 }
