@@ -82,6 +82,11 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
+        <!-- Kafka producer (for OutboxPublisher) -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
         <!-- Resilience4j — Circuit Breaker, Retry, Bulkhead -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

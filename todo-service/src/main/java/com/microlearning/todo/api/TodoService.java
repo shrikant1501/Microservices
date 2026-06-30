@@ -1,7 +1,11 @@
 package com.microlearning.todo.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microlearning.todo.client.UserResponse;
 import com.microlearning.todo.client.UserServiceClient;
+import com.microlearning.todo.domain.OutboxEvent;
+import com.microlearning.todo.domain.OutboxEventRepository;
 import com.microlearning.todo.domain.Todo;
 import com.microlearning.todo.domain.TodoRepository;
 import feign.FeignException;
@@ -15,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -53,10 +58,15 @@ public class TodoService {
 
     private final TodoRepository todoRepo;
     private final UserServiceClient userClient;
+    private final OutboxEventRepository outboxRepo;
+    private final ObjectMapper objectMapper;
 
-    public TodoService(TodoRepository todoRepo, UserServiceClient userClient) {
+    public TodoService(TodoRepository todoRepo, UserServiceClient userClient,
+                       OutboxEventRepository outboxRepo, ObjectMapper objectMapper) {
         this.todoRepo = todoRepo;
         this.userClient = userClient;
+        this.outboxRepo = outboxRepo;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -127,14 +137,42 @@ public class TodoService {
         return toResponse(todo);
     }
 
+    /**
+     * completeTodo — Phase 9: Outbox Pattern integration.
+     *
+     * BEFORE (Phase 4): kafkaTemplate.send("todo-completed", event)
+     *   → If service crashes after DB save but before Kafka publish,
+     *     event is lost. Notification never sent.
+     *
+     * AFTER (Phase 9 Outbox):
+     *   todo update + outbox record saved in ONE @Transactional
+     *   → Either both commit or both rollback. Atomicity guaranteed.
+     *   → OutboxPublisher sends the event asynchronously.
+     *   → Even if OutboxPublisher crashes, it re-reads and re-publishes on restart.
+     */
     @Transactional
     public TodoResponse completeTodo(Long todoId) {
         Todo todo = todoRepo.findById(todoId)
                 .orElseThrow(() -> new RuntimeException("Todo not found: " + todoId));
         todo.setCompleted(true);
         todo.setCompletedAt(LocalDateTime.now());
-        log.info("[todo-service] Completed todo id={}", todoId);
-        return toResponse(todoRepo.save(todo));
+        Todo saved = todoRepo.save(todo);
+
+        // OUTBOX: save event in same transaction as the business record
+        try {
+            String payload = objectMapper.writeValueAsString(Map.of(
+                    "todoId",   saved.getId(),
+                    "userId",   saved.getUserId(),
+                    "todoTitle",saved.getTitle(),
+                    "eventId",  java.util.UUID.randomUUID().toString()  // idempotency key
+            ));
+            outboxRepo.save(new OutboxEvent("todo-completed", payload));
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize outbox event for todoId={}", todoId, e);
+        }
+
+        log.info("[todo-service] Completed todo id={}, outbox event saved", todoId);
+        return toResponse(saved);
     }
 
     public List<TodoResponse> getTodosByUser(Long userId) {

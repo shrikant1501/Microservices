@@ -3,6 +3,7 @@ package com.microlearning.todo;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * TodoServiceApplication — Phase 3
@@ -19,6 +20,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @SpringBootApplication
 @EnableFeignClients
+@EnableScheduling   // required for @Scheduled in OutboxPublisher
 public class TodoServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(TodoServiceApplication.class, args);

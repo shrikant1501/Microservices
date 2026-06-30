@@ -7,61 +7,83 @@ import org.springframework.kafka.annotation.RetryableTopic;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * NotificationConsumer — reacts to domain events from Kafka.
+ * NotificationConsumer — Phase 9: Idempotent consumer.
  *
  * ═══════════════════════════════════════════════════════════════
- * THIS IS THE KEY TRANSFORMATION FROM PHASE 1 MONOLITH
+ * IDEMPOTENCY IMPLEMENTATION
  * ═══════════════════════════════════════════════════════════════
  *
- * MONOLITH (Phase 1):
- *   UserService directly called notificationService.sendWelcomeEmail()
- *   → synchronous, coupled, notification failure = user registration failure
+ * Kafka delivers at-least-once. The same event can arrive multiple times:
+ *   - Consumer crashed after processing but before committing offset
+ *   - Kafka partition rebalancing
+ *   - Manual replay from DLT
  *
- * MICROSERVICE (Phase 4):
- *   user-service publishes "UserCreated" event to Kafka
- *   notification-service INDEPENDENTLY consumes and processes it
- *   → user-service doesn't know notification-service exists
- *   → notification-service failure has ZERO impact on user creation
- *   → notification-service can be down, come back, and process all missed events
+ * WITHOUT idempotency: "welcome email sent 3 times to the same user"
  *
- * @RetryableTopic — PRODUCTION ESSENTIAL:
- *   If processUserCreated() throws an exception:
- *   → Kafka retries the message up to 3 times with exponential backoff (2s, 4s, 8s)
- *   → After 3 failures, message goes to Dead Letter Topic: "user-created-dlt"
- *   → Operations team can inspect, fix the bug, and replay from DLT
- *   → No message is ever lost (at-least-once delivery)
+ * WITH idempotency:
+ *   1. Every event carries a unique eventId (UUID from producer)
+ *   2. Before processing, check if eventId was already processed
+ *   3. If yes → skip (already done)
+ *   4. If no  → process + record eventId
  *
- * IDEMPOTENCY NOTE:
- *   With retries, the same message can be delivered multiple times.
- *   A production-ready consumer would check:
- *     if (notificationRepo.existsByUserIdAndType(userId, "WELCOME")) return;
- *   We skip this for clarity — covered conceptually in Phase 9 (Idempotency).
+ * PRODUCTION NOTE:
+ * Replace the in-memory LRU cache with a database table:
+ *   CREATE TABLE processed_events (
+ *     event_id VARCHAR(36) PRIMARY KEY,
+ *     processed_at TIMESTAMP
+ *   );
+ * This survives service restarts. The in-memory cache does NOT.
+ * For learning purposes, the LRU cache demonstrates the pattern correctly.
  */
 @Component
 public class NotificationConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationConsumer.class);
 
-    /**
-     * @RetryableTopic: Spring Kafka 2.7+ feature.
-     * Creates retry topics automatically: user-created-retry-0, user-created-retry-1, etc.
-     * Far simpler than manual error handling. Remove if Kafka version doesn't support it.
-     */
+    // In-memory idempotency store (LRU cache, max 1000 entries)
+    // Production: replace with a DB table + TTL cleanup job
+    private final Map<String, Boolean> processedEvents = Collections.synchronizedMap(
+            new LinkedHashMap<>() {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+                    return size() > 1000;
+                }
+            }
+    );
+
     @RetryableTopic(
-        attempts = "3",
-        backoff = @Backoff(delay = 2000, multiplier = 2),
-        autoCreateTopics = "false"
+            attempts = "3",
+            backoff = @Backoff(delay = 2000, multiplier = 2),
+            autoCreateTopics = "false"
     )
     @KafkaListener(topics = "user-created", groupId = "notification-group",
-                   containerFactory = "kafkaListenerContainerFactory")
+            containerFactory = "kafkaListenerContainerFactory")
     public void onUserCreated(UserCreatedEvent event) {
-        log.info("[notification-service] Received UserCreatedEvent: userId={}, email={}",
+        // ─── IDEMPOTENCY CHECK ─────────────────────────────────────────────
+        // In production: replace eventId source with a real field from the event
+        // For now we use userId as a proxy idempotency key
+        String idempotencyKey = "user-created:" + event.getUserId();
+
+        if (processedEvents.containsKey(idempotencyKey)) {
+            log.warn("[notification-service] DUPLICATE UserCreated event — skipping. key={}", idempotencyKey);
+            return;
+        }
+        // ───────────────────────────────────────────────────────────────────
+
+        log.info("[notification-service] Processing UserCreatedEvent: userId={}, email={}",
                 event.getUserId(), event.getEmail());
 
         // Simulate sending welcome email
-        // Production: emailService.send(event.getEmail(), "Welcome " + event.getName() + "!")
         log.info("[notification-service] ✉ Welcome email sent to {} <{}>",
                 event.getName(), event.getEmail());
+
+        // Record as processed AFTER successful processing
+        // If processing fails, we do NOT record — so it will be retried
+        processedEvents.put(idempotencyKey, Boolean.TRUE);
     }
 }
